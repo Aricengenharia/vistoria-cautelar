@@ -1,0 +1,56 @@
+import { describe, expect, it, vi } from "vitest";
+import { createInspection } from "../lib/inspection-storage";
+
+vi.mock("react-native", () => ({ Platform: { OS: "web" } }));
+vi.mock("expo-file-system/legacy", () => ({ readAsStringAsync: vi.fn() }));
+vi.mock("expo-print", () => ({ printAsync: vi.fn(), printToFileAsync: vi.fn() }));
+vi.mock("expo-sharing", () => ({ isAvailableAsync: vi.fn(async () => false), shareAsync: vi.fn() }));
+
+describe("relatório PDF completo", () => {
+  it("inclui todas as seções e dados principais", async () => {
+    const { buildInspectionReportHtml } = await import("../lib/report-pdf");
+    const item = createInspection();
+    item.property.workName = "Obra teste";
+    item.inspectorName = "Eng. Vistoriador";
+    item.reviewerName = "Eng. Conferente";
+    item.approverName = "Eng. Aprovador";
+    item.status = "Conferido";
+    item.property.address = "Rua do Teste";
+    item.property.undergroundInterferences = ["Cisterna"];
+    item.description = "Descrição da vistoria";
+    item.methodNotes = "Metodologia aplicada";
+    item.location = { latitude: -23.55, longitude: -46.63, accuracy: 4, capturedAt: new Date().toISOString() };
+    item.sketch = { mode: "draw", uri: "", strokes: ["S:10,20", "40,60"] };
+    item.externalArea = { enabled: true, observations: "Área externa observada", items: { Piso: { material: ["Cerâmico"], pathology: ["Trinca", "Não identificado"] } } };
+    item.environments = ["Sala"];
+    item.environmentDetails.Sala = { observations: "Sala observada", finishes: "Piso cerâmico", pathologies: "Fissura", checklist: { Parede: { material: ["Pintura"], pathology: ["Fissura"] } }, electricalInstallations: "Tomadas", hydraulicInstallations: "Não se aplica" };
+    item.internalChecklist = { Teto: { material: ["Laje"], pathology: ["Umidade", "Não identificado"] } };
+    item.occupantSurvey = { "IPTU-present": "Sim", "IPTU-number": "123", anomalies: "Nenhuma", responsible: "Pessoa Teste" };
+    item.occupantSurvey["Matrícula no Registro de Imóveis-present"] = "Sim";
+    item.occupantSurvey.renovationChanges = "Ampliação da cozinha";
+    item.projectDocumentUri = "data:image/png;base64,ZmFrZQ==";
+    item.entryAccess = { status: "Não foi possível", attempts: [{ date: "29/09/2026", time: "08:00", photoUri: "data:image/png;base64,Zm90by0x" }, { date: "29/09/2026", time: "10:00", photoUri: "" }, { date: "29/09/2026", time: "14:00", photoUri: "" }] };
+    item.questionnaire.comments = "Sem reclamações";
+    item.opinion = "Parecer técnico de teste";
+    item.signatures.responsible = ["S:10,20", "100,80"];
+    item.signatures.occupant = ["S:20,30", "120,90"];
+    const html = await buildInspectionReportHtml(item);
+    for (const section of ["Identificação do imóvel", "Descrição e metodologia", "Localização e georreferenciamento", "Croqui da planta", "Área externa", "Ambientes internos", "Características construtivas", "Índice de vulnerabilidade", "Questionário com o ocupante", "Parecer técnico", "Responsáveis pelo workflow", "Assinaturas"]) expect(html).toContain(section);
+    expect(html).toContain("Área externa observada");
+    expect(html).toContain("Parecer técnico de teste");
+    expect(html).toContain("Pessoa Teste");
+    expect(html).toContain("Eng. Vistoriador");
+    expect(html).toContain("Eng. Conferente");
+    expect(html).toContain("Eng. Aprovador");
+    expect(html).toContain("Conferido");
+    expect(html).toContain("Não identificado");
+    expect(html).toContain("Ampliação da cozinha");
+    expect(html).toContain("data:image/png;base64,ZmFrZQ==");
+    expect(html).toContain("Vistoria não realizada: entrada não autorizada.");
+    expect(html).toContain("29/09/2026");
+    expect(html).toContain("data:image/png;base64,Zm90by0x");
+    expect(html).not.toContain("Matrícula disponível");
+    expect(html).toContain("page-break-before:always");
+    expect(html).toContain("@page{size:A4");
+  });
+});
